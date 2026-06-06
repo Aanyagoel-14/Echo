@@ -2,79 +2,42 @@ import { useState } from 'react'
 import Button from '../components/Button'
 import ScreenScaffold from '../components/ScreenScaffold'
 
-const TABS = [
-  { id: 'reel', label: 'Reel' },
-  { id: 'carousel', label: 'Carousel' },
-  { id: 'thread', label: 'Thread' },
-]
+const ORDER = ['reel', 'carousel', 'thread']
 
 /*
  * Results (§5 + §6). The kit arrives as one JSON object from POST /api/generate
- * (fetched in Loading, passed down via App) and we render each format the way
- * its platform actually looks: Reel as a script block + numbered shot list,
- * Carousel as swipeable IG slides (horizontal snap-scroll), Thread as stacked X
- * cards. Copy-to-clipboard on each. The endpoint returns mock JSON until the
- * event; these renderers don't change when the real model lands.
+ * (fetched in Loading, passed down via App). The creator already picked their
+ * formats in Capture, so there's no tab-hunting here — we just stack whichever
+ * formats came back, each rendered the way its platform actually looks: Reel as
+ * a script block + numbered shot list, Carousel as swipeable IG slides
+ * (horizontal snap-scroll), Thread as stacked X cards. Copy-to-clipboard on each.
  */
 export default function Results({ onNew, kit }) {
-  const [tab, setTab] = useState('reel')
+  const present = kit ? ORDER.filter((f) => kit[f]) : []
 
-  // Defensive empty state (§7, CP6). The mock always provides a full kit, but
-  // CP7 passes a real /api/generate response — a partial/empty one shows this
-  // instead of a broken screen.
-  if (!kit?.reel || !kit?.carousel || !kit?.thread) {
+  // Defensive empty state (§7): a partial/empty response shows this instead of
+  // a broken screen.
+  if (!present.length) {
     return <ResultsEmpty onNew={onNew} />
   }
 
   return (
-    <section className="flex flex-1 flex-col gap-5">
+    <section className="flex flex-1 flex-col gap-6">
       <div className="space-y-1">
         <h1 className="text-xl font-bold tracking-tight text-ink">
           Your kit is ready
         </h1>
         <p className="text-sm text-muted">
-          Three platform-ready posts, in your voice.
+          {present.length === 1
+            ? 'Platform-ready, in your voice.'
+            : `${present.length} platform-ready posts, in your voice.`}
         </p>
       </div>
 
-      <div
-        role="tablist"
-        aria-label="Content formats"
-        className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-surface p-1"
-      >
-        {TABS.map((t) => {
-          const active = tab === t.id
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              id={`tab-${t.id}`}
-              aria-selected={active}
-              aria-controls={`panel-${t.id}`}
-              onClick={() => setTab(t.id)}
-              className={[
-                'rounded-xl py-2 text-sm font-semibold transition duration-150',
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
-                active ? 'bg-accent text-white' : 'text-muted hover:text-ink',
-              ].join(' ')}
-            >
-              {t.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <div
-        key={tab}
-        id={`panel-${tab}`}
-        role="tabpanel"
-        aria-labelledby={`tab-${tab}`}
-        className="flex-1 animate-rise"
-      >
-        {tab === 'reel' && <ReelView reel={kit.reel} />}
-        {tab === 'carousel' && <CarouselView carousel={kit.carousel} />}
-        {tab === 'thread' && <ThreadView thread={kit.thread} />}
+      <div className="flex flex-col gap-8">
+        {kit.reel && <ReelView reel={kit.reel} />}
+        {kit.carousel && <CarouselView carousel={kit.carousel} />}
+        {kit.thread && <ThreadView thread={kit.thread} />}
       </div>
 
       <Button variant="secondary" onClick={onNew}>
@@ -169,29 +132,71 @@ function CarouselView({ carousel }) {
       </SectionBar>
 
       <div className="-mx-6 flex snap-x snap-mandatory gap-3 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {slides.map((slide, i) => (
-          <article
-            key={i}
-            className="flex aspect-[4/5] shrink-0 basis-[80%] snap-center flex-col justify-between overflow-hidden rounded-3xl border border-border bg-surface p-5"
-          >
-            <span className="text-xs font-semibold tracking-wide text-muted">
-              {String(i + 1).padStart(2, '0')}
-              <span className="text-muted/50">
-                {' '}
-                / {String(total).padStart(2, '0')}
+        {slides.map((slide, i) => {
+          // Slides may carry a generated image (added best-effort after the text
+          // kit); when present it's a full-bleed background with a scrim so the
+          // overlaid copy stays legible, otherwise the clean surface card.
+          const hasImage = Boolean(slide.image)
+          return (
+            <article
+              key={i}
+              className={[
+                'relative flex aspect-[4/5] shrink-0 basis-[80%] snap-center flex-col justify-between overflow-hidden rounded-3xl border p-5',
+                hasImage ? 'border-white/10' : 'border-border bg-surface',
+              ].join(' ')}
+            >
+              {hasImage && (
+                <>
+                  <img
+                    src={slide.image}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10" />
+                </>
+              )}
+              <span
+                className={[
+                  'relative text-xs font-semibold tracking-wide',
+                  hasImage ? 'text-white/80' : 'text-muted',
+                ].join(' ')}
+              >
+                {String(i + 1).padStart(2, '0')}
+                <span className={hasImage ? 'text-white/40' : 'text-muted/50'}>
+                  {' '}
+                  / {String(total).padStart(2, '0')}
+                </span>
               </span>
-            </span>
-            <div className="space-y-2">
-              <h3 className="text-2xl font-bold leading-tight tracking-tight text-ink text-balance">
-                {slide.title}
-              </h3>
-              <p className="text-sm leading-relaxed text-muted">{slide.body}</p>
-            </div>
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted/60">
-              echo
-            </span>
-          </article>
-        ))}
+              <div className="relative space-y-2">
+                <h3
+                  className={[
+                    'text-2xl font-bold leading-tight tracking-tight text-balance',
+                    hasImage ? 'text-white' : 'text-ink',
+                  ].join(' ')}
+                >
+                  {slide.title}
+                </h3>
+                <p
+                  className={[
+                    'text-sm leading-relaxed',
+                    hasImage ? 'text-white/85' : 'text-muted',
+                  ].join(' ')}
+                >
+                  {slide.body}
+                </p>
+              </div>
+              <span
+                className={[
+                  'relative text-[11px] font-semibold uppercase tracking-widest',
+                  hasImage ? 'text-white/70' : 'text-muted/60',
+                ].join(' ')}
+              >
+                echo
+              </span>
+            </article>
+          )
+        })}
       </div>
 
       <p className="text-center text-xs text-muted/70">
