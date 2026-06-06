@@ -3,7 +3,7 @@
  * The active step is a wide accent pill; past steps stay tinted, future ones
  * are border-grey. Purely presentational — App owns which step is active.
  */
-const STEPS = ['Brand voice', 'Capture', 'Results']
+const STEPS = ['Voice', 'Capture', 'Results']
 
 export default function StepIndicator({ active }) {
   return (

@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import StepIndicator from './components/StepIndicator'
-import BrandVoiceSetup from './screens/BrandVoiceSetup'
+import VoiceProfileSetup from './screens/VoiceProfileSetup'
 import Capture from './screens/Capture'
 import Loading from './screens/Loading'
 import Results from './screens/Results'
 import GenerationError from './screens/GenerationError'
+import { hasVoiceProfile } from './lib/voiceProfile'
 
 /*
  * App shell + state-based navigation (no router — §5). App also owns the
  * synthesis request + the generated kit: Capture builds the request, Loading
  * POSTs it to /api/generate (CP7), and the resulting kit flows to Results.
- * Flow: Brand voice → Capture → Loading → Results → (New) → Capture.
+ *
+ * Flow (§0.1 — set up once, create every day):
+ *   first run (no voice.md) → Voice Profile builder → Capture → …
+ *   returning (voice.md found) → straight to Capture, profile auto-injected.
  * Loading branches to the error screen when synthesis fails (§7).
  */
 const STEP_FOR_SCREEN = { voice: 0, capture: 1, loading: 1, error: 1, results: 2 }
@@ -29,7 +33,11 @@ function EchoMark() {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState('voice')
+  // Boot gate (§0.1): returning creators (a stored voice.md) skip setup and land
+  // on Capture; first-run users start in the Voice Profile builder.
+  const [screen, setScreen] = useState(() =>
+    hasVoiceProfile() ? 'capture' : 'voice',
+  )
   const [request, setRequest] = useState(null)
   const [kit, setKit] = useState(null)
   const go = useCallback((next) => setScreen(next), [])
@@ -69,10 +77,13 @@ export default function App() {
       {/* key={screen} remounts the body on each nav, replaying the entrance. */}
       <div key={screen} className="flex flex-1 flex-col animate-rise">
         {screen === 'voice' && (
-          <BrandVoiceSetup onContinue={() => go('capture')} />
+          <VoiceProfileSetup
+            onDone={() => go('capture')}
+            onCancel={() => go('capture')}
+          />
         )}
         {screen === 'capture' && (
-          <Capture onGenerate={handleGenerate} onBack={() => go('voice')} />
+          <Capture onGenerate={handleGenerate} onEditVoice={() => go('voice')} />
         )}
         {screen === 'loading' && (
           <Loading request={request} onDone={handleDone} onError={handleError} />
