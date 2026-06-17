@@ -1,5 +1,12 @@
 # Phase 0 — Social import setup (Instagram + X)
 
+> ⚠️ **Superseded — historical (18 June 2026).** Echo no longer connects to social
+> accounts via OAuth. Brand-voice import is now **upload-first**: the creator uploads
+> a posts file they exported themselves and it's parsed entirely in the browser (no
+> login, no server, no secrets). This document describes the **abandoned OAuth
+> approach** and is kept only for history — see
+> **[`social-import-upload.md`](./social-import-upload.md)** for the shipped design.
+
 One-time setup you do in the platform dashboards before the **real** OAuth phases
 (Phase 2+). Phase 1 (the mock-first import UI) needs **none** of this, so I can
 build that in parallel.

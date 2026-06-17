@@ -1,55 +1,58 @@
 /*
- * Social import connector.
+ * Social import — the single seam between the UI and the data source (the one
+ * rule: everything downstream consumes { platform, handle, posts: string[] } and
+ * never changes; only this file knows where that shape comes from). See
+ * docs/social-import-upload.md.
  *
- * Phase 1: a MOCK that returns fixture posts so the whole
- * connect → clean → samples → generate flow works offline. Phase 2 replaces
- * importPosts() with the real serverless OAuth redirect — the UI contract
- * (call → loading → { platform, handle, posts } → write samples) stays the same,
- * so the Brand Voice screen and ImportPosts component never change.
+ * Upload-first: the creator uploads the posts file they exported from a platform
+ * (Instagram / X / LinkedIn). We parse it IN THE BROWSER (importAdapters.js),
+ * clean it into a few voice samples, and hand back { platform, handle, posts }.
+ * No OAuth, no API, no server — the file never leaves the device.
  */
 import { cleanPosts } from './postClean'
+import { detectAndExtract } from './importAdapters'
 
 export const IMPORT_PLATFORMS = [
   { id: 'instagram', label: 'Instagram' },
   { id: 'x', label: 'X' },
+  { id: 'linkedin', label: 'LinkedIn' },
 ]
 
-// --- MOCK fixtures (Phase 1 only) -------------------------------------------
-// Intentionally include junk (a retweet, a reply, a link-only post, a dup, a
-// trailing URL) so the cleaning step visibly does its job.
-const MOCK_POSTS = {
-  instagram: [
-    'sunrise runs hit different ☀️ 5k before the world wakes up. who’s with me? #morningrun #runtok',
-    'new ceramic mug drop 🍵 small batch, hand-glazed, slightly imperfect on purpose. link in bio 👇',
-    'behind the scenes of today’s shoot 📸 swipe for the bloopers 😅',
-    'https://example.com/p/123',
-    'grateful for this little community 🤍 can’t believe there are 200k of you now??',
-  ],
-  x: [
-    'shipped a tiny feature today that I’ve wanted for months. small wins compound. 🚀',
-    'hot take: your morning routine isn’t failing because you’re lazy. it’s built wrong.',
-    'RT @someone: this is a retweet that should be dropped',
-    '@friend totally agree with you',
-    'spent the weekend rebuilding my site from scratch. worth every hour. more soon 👇 https://t.co/abc123',
-  ],
+const codedError = (code, message) => {
+  const err = new Error(message || code)
+  err.code = code
+  return err
 }
 
-const MOCK_HANDLE = { instagram: '@yourbrand', x: '@yourbrand' }
+// Sanity cap. Exports are text-only and tiny next to this; the bound just stops
+// the browser choking if someone picks the wrong, enormous file.
+const MAX_BYTES = 50 * 1024 * 1024
+
+// Read a File as a UTF-8 string via the browser FileReader.
+function readFileText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(codedError('read-error', 'Could not read that file.'))
+    reader.readAsText(file)
+  })
+}
 
 /*
- * Connect an account and return cleaned voice samples. Phase-1 mock: resolves
- * with fixtures after a short delay (the feel of a network round-trip). Throws
- * Error with code 'no-posts' when there's nothing usable to learn from.
+ * Parse an uploaded export file into cleaned voice samples. `platformHint` is the
+ * picker selection — the adapter sniffs the file content and the hint only breaks
+ * ties, so a mislabeled pick still works. Throws Error with a stable `.code`
+ * (read-error, too-large, unsupported-file, parse-error, no-posts) so the UI can
+ * map it to friendly copy. `handle` is best-effort (exports rarely carry one).
  */
-export async function importPosts(platform) {
-  const raw = MOCK_POSTS[platform]
-  if (!raw) throw new Error(`Unsupported platform: ${platform}`)
-  await new Promise((resolve) => setTimeout(resolve, 900))
-  const posts = cleanPosts(raw)
-  if (!posts.length) {
-    const err = new Error('No usable posts found')
-    err.code = 'no-posts'
-    throw err
+export async function importFromFile(file, platformHint) {
+  if (!file) throw codedError('read-error', 'No file selected.')
+  if (file.size > MAX_BYTES) {
+    throw codedError('too-large', 'That file is larger than expected.')
   }
-  return { platform, handle: MOCK_HANDLE[platform], posts }
+  const text = await readFileText(file)
+  const { platform, raw } = detectAndExtract(file.name, text, platformHint)
+  const posts = cleanPosts(raw)
+  if (!posts.length) throw codedError('no-posts', 'No usable posts found in that file.')
+  return { platform, handle: null, posts }
 }

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" type="image/svg+xml" href="/echo-icon.svg" />
+    <title>Echo — Privacy Policy</title>
+    <style>
+      :root {
+        --bg: #f4f6f9;
+        --surface: #ffffff;
+        --ink: #15171c;
+        --muted: #5b616e;
+        --border: #e4e8ee;
+        --accent: #4f46e5;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0b0f;
+          --surface: #15161c;
+          --ink: #f3f4f7;
+          --muted: #a0a6b3;
+          --border: #262834;
+          --accent: #8b87ff;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+        padding: 3rem 1.5rem 4rem;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        padding: 2rem;
+      }
+      h1 { font-size: 1.6rem; margin: 0 0 0.25rem; letter-spacing: -0.02em; }
+      h2 { font-size: 1.1rem; margin: 2rem 0 0.5rem; letter-spacing: -0.01em; }
+      p, li { color: var(--muted); }
+      .ink { color: var(--ink); font-weight: 600; }
+      .meta { color: var(--muted); font-size: 0.85rem; margin: 0 0 1.5rem; }
+      a { color: var(--accent); }
+      ul { padding-left: 1.1rem; }
+      li { margin: 0.35rem 0; }
+      .brand { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 1.5rem; }
+      .brand span { font-weight: 700; letter-spacing: -0.01em; }
+      code { background: var(--bg); border: 1px solid var(--border); border-radius: 0.4rem; padding: 0.1rem 0.35rem; font-size: 0.85em; }
+      footer { margin-top: 2rem; font-size: 0.85rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <svg viewBox="0 0 512 512" width="26" height="26" aria-hidden="true">
+          <g fill="none" stroke="var(--accent)">
+            <circle cx="256" cy="256" r="150" stroke-width="14" opacity="0.26" />
+            <circle cx="256" cy="256" r="104" stroke-width="16" opacity="0.55" />
+            <circle cx="256" cy="256" r="58" stroke-width="18" />
+          </g>
+          <circle cx="256" cy="256" r="22" fill="var(--accent)" />
+        </svg>
+        <span>Echo</span>
+      </div>
+
+      <div class="card">
+        <h1>Privacy Policy</h1>
+        <p class="meta">Last updated: 18 June 2026</p>
+
+        <p>
+          Echo helps creators turn one idea into a multi-platform content kit in
+          their own brand voice. This policy explains exactly what happens when you
+          upload a posts file you exported from a social platform so Echo can learn
+          your voice from your own past posts.
+        </p>
+
+        <h2>The short version</h2>
+        <ul>
+          <li><span class="ink">No login, ever</span> — you upload a file you exported yourself; Echo never connects to your account.</li>
+          <li><span class="ink">Your file never leaves your device</span> — it's read and parsed in your browser, not uploaded to us.</li>
+          <li><span class="ink">We read it once</span>, to set up your brand voice — a few short writing samples.</li>
+          <li><span class="ink">Those samples live only on your device</span>, in your browser's local storage.</li>
+        </ul>
+
+        <h2>What you upload</h2>
+        <p>
+          You export your own data from the platform and upload a single file — the
+          one that contains your posts:
+        </p>
+        <ul>
+          <li><span class="ink">Instagram</span>: the <code>posts_1.json</code> file from your "Download your information" export — we read only your captions.</li>
+          <li><span class="ink">X</span>: the <code>tweets.js</code> file from your data archive — we read only your posts' text (retweets and replies are dropped).</li>
+          <li><span class="ink">LinkedIn</span>: the <code>Shares.csv</code> file from "Get a copy of your data" — we read only the post text.</li>
+        </ul>
+        <p>
+          We never ask for your password and never connect to your account. The file
+          is processed entirely in your browser.
+        </p>
+
+        <h2>How your data is handled</h2>
+        <ul>
+          <li>Your uploaded file is read and parsed <span class="ink">in your browser</span> — it is never uploaded to our servers, never written to a database, and never logged.</li>
+          <li>Your posts are cleaned into up to four short writing samples that stay on your device. Those samples — your "brand voice" — are stored only in your browser's local storage, so they survive refreshes.</li>
+          <li>We do not sell or share your data, and we do not use it for advertising or to train models on your behalf.</li>
+        </ul>
+
+        <h2>Generating content</h2>
+        <p>
+          When you generate a content kit, your brief and your brand-voice samples
+          are sent to our synthesis endpoint to produce the kit, which is returned to
+          your browser. We do not retain these requests to build a profile of you.
+        </p>
+
+        <h2>Your choices &amp; deleting your data</h2>
+        <ul>
+          <li>There's nothing to revoke — Echo never connects to your account, so it holds no access to remove.</li>
+          <li>Because your brand voice lives in your browser, you can clear it instantly from within Echo (clear the posts field) or by clearing your browser storage for this site.</li>
+          <li>We hold none of your data on our servers, so there is nothing for us to delete on your behalf.</li>
+        </ul>
+
+        <h2>Contact</h2>
+        <p>
+          Questions about this policy or your data? Email
+          <a href="mailto:you@example.com">you@example.com</a>.
+          <!-- TODO: replace with your real, monitored contact address before public launch / App Review. -->
+        </p>
+
+        <footer>
+          <a href="/">← Back to Echo</a>
+        </footer>
+      </div>
+    </main>
+  </body>
+</html>
