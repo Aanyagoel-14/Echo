@@ -9,6 +9,12 @@ dist/
 .env.local
 .env.*.local
 
+# Local-only test fixtures — real personal social exports used to test the
+# importer (Instagram posts_1.json / X tweets.js / LinkedIn Shares.csv). They
+# contain personal data and must never be committed or shipped. Force-add with
+# `git add -f` if you ever want a synthetic fixture in the repo.
+test/fixtures/
+
 # Logs
 *.log
 npm-debug.log*
