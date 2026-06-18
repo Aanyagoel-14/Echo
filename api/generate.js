@@ -16,6 +16,7 @@
  */
 
 import { resolveImageModel } from '../src/lib/openrouterImages.js'
+import { chatCompletions, isModelConfigured } from '../src/lib/llm.js'
 
 const ALL_FORMATS = ['reel', 'carousel', 'thread']
 
@@ -200,16 +201,18 @@ export default async function handler(req, res) {
     return
   }
 
-  const key = process.env.OPENROUTER_API_KEY
-  if (!key) {
-    // Generation has no on-device fallback yet — make the missing key explicit
-    // rather than silently shipping mock content.
+  if (!isModelConfigured()) {
+    // Generation has no on-device fallback yet — make the missing config
+    // explicit rather than silently shipping mock content.
     res.status(503).json({ error: 'no_key' })
     return
   }
 
   const voiceMd = asString(voiceProfile?.profileMarkdown)
-  const model = process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash'
+  const model =
+    process.env.ECHO_GENERATE_MODEL ||
+    process.env.ECHO_MODEL ||
+    'google/gemini-2.5-flash'
   const started = Date.now()
 
   console.log('[generate] request', {
@@ -223,36 +226,26 @@ export default async function handler(req, res) {
   })
 
   try {
-    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://echo-one-gamma.vercel.app',
-        'X-Title': 'Echo generate',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2000,
-        temperature: 0.8,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: buildSystem(formats, voiceMd, audit) },
-          {
-            role: 'user',
-            content: buildUserContent({ input, image, inspiration, formats }),
-          },
-        ],
-      }),
+    const { ok, status, data, error } = await chatCompletions({
+      model,
+      max_tokens: 2000,
+      temperature: 0.8,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: buildSystem(formats, voiceMd, audit) },
+        {
+          role: 'user',
+          content: buildUserContent({ input, image, inspiration, formats }),
+        },
+      ],
     })
 
     const elapsedMs = Date.now() - started
-    const data = await r.json()
 
-    if (!r.ok) {
-      console.error('[generate] openrouter error', r.status, data?.error)
+    if (!ok) {
+      console.error('[generate] vertex error', status, error)
       res.status(502).json({
-        error: data?.error?.message || data?.error || 'OpenRouter returned an error',
+        error: error || 'Vertex returned an error',
         elapsedMs,
       })
       return
@@ -276,17 +269,23 @@ export default async function handler(req, res) {
       return
     }
 
-    // Pick the best image model OpenRouter exposes on this key, once, so the
-    // client can illustrate each carousel slide (POST /api/carousel-image)
-    // without re-discovering the model per slide. Best-effort — never blocks
-    // the text kit; a null just means the slide endpoint resolves it itself.
+    // Carousel slide images still come from OpenRouter (a separate concern from
+    // the Vertex text path). Pick the best image model that key exposes, once,
+    // so the client can illustrate each slide (POST /api/carousel-image) without
+    // re-discovering the model per slide. Best-effort — never blocks the text
+    // kit; no OpenRouter key (or an error) just means null and no AI slide art.
     if (kit.carousel) {
-      try {
-        kit.imageModel = await resolveImageModel({
-          key,
-          override: process.env.OPENROUTER_IMAGE_MODEL,
-        })
-      } catch {
+      const orKey = process.env.OPENROUTER_API_KEY
+      if (orKey) {
+        try {
+          kit.imageModel = await resolveImageModel({
+            key: orKey,
+            override: process.env.OPENROUTER_IMAGE_MODEL,
+          })
+        } catch {
+          kit.imageModel = null
+        }
+      } else {
         kit.imageModel = null
       }
     }

@@ -30,6 +30,7 @@ import {
   assembleAuditFromSections,
   countAuditSections,
 } from '../src/lib/audit.js'
+import { chatCompletions, isModelConfigured } from '../src/lib/llm.js'
 
 // The model may wrap JSON in prose/fences despite instructions — extract it.
 function parseModelJson(content) {
@@ -72,35 +73,25 @@ Ground every point in the provided posts and trends. Be concrete and specific �
 // Call the cloud model and assemble the critique. Throws on any failure so the
 // handler can fall back to the mock — generation has no on-device model, but the
 // audit does (the templated mock), so a model hiccup never breaks the page.
-async function runModelAudit({ key, brandVoice, posts, trends, inspiration }) {
+async function runModelAudit({ brandVoice, posts, trends, inspiration }) {
   const model =
-    process.env.OPENROUTER_AUDIT_MODEL ||
-    process.env.OPENROUTER_MODEL ||
+    process.env.ECHO_AUDIT_MODEL ||
+    process.env.ECHO_MODEL ||
     'google/gemini-2.5-flash'
 
-  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://echo-one-gamma.vercel.app',
-      'X-Title': 'Echo audit',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1500,
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: buildAuditSystem({ brandVoice, posts, trends, inspiration }) },
-        { role: 'user', content: 'Write the audit now as the specified JSON object.' },
-      ],
-    }),
+  const { ok, status, data, error } = await chatCompletions({
+    model,
+    max_tokens: 1500,
+    temperature: 0.7,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: buildAuditSystem({ brandVoice, posts, trends, inspiration }) },
+      { role: 'user', content: 'Write the audit now as the specified JSON object.' },
+    ],
   })
 
-  const data = await r.json()
-  if (!r.ok) {
-    throw new Error(data?.error?.message || data?.error || `OpenRouter ${r.status}`)
+  if (!ok) {
+    throw new Error(error || `Vertex ${status}`)
   }
   const parsed = parseModelJson(data?.choices?.[0]?.message?.content)
   if (!parsed || typeof parsed !== 'object') {
@@ -143,7 +134,7 @@ export default async function handler(req, res) {
   const batch = readBatch() || generateMockBatch({ now: new Date() })
   const trends = selectNiche(batch, nicheInput)
 
-  const key = process.env.OPENROUTER_API_KEY
+  const useModel = isModelConfigured()
 
   console.log('[audit] received', {
     posts: list.length,
@@ -152,17 +143,17 @@ export default async function handler(req, res) {
     tone: brandVoice?.tone ?? null,
     hasInspiration: Boolean(inspiration?.refs || inspiration?.visuals?.length),
     trendsSource: batch.source,
-    model: Boolean(key),
+    model: useModel,
   })
 
-  // Real model when a key is configured; the templated mock otherwise (or if the
+  // Real model when Vertex is configured; the templated mock otherwise (or if the
   // model errors / returns thin output). buildAuditPrompt() assembles the exact
   // spec prompt with the inputs interpolated, so this is the live wiring of the
   // seam the mock always stood in for.
   let audit = null
-  if (key) {
+  if (useModel) {
     try {
-      audit = await runModelAudit({ key, brandVoice, posts: list, trends, inspiration })
+      audit = await runModelAudit({ brandVoice, posts: list, trends, inspiration })
     } catch (e) {
       console.error('[audit] model failed, falling back to mock:', String(e?.message || e))
     }
