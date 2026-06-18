@@ -5,6 +5,7 @@ import { useTheme } from './lib/theme'
 import { EMPTY_INSPIRATION } from './lib/inspiration'
 import BrandVoiceSetup from './screens/BrandVoiceSetup'
 import Inspiration from './screens/Inspiration'
+import Audit from './screens/Audit'
 import Capture from './screens/Capture'
 import Loading from './screens/Loading'
 import Results from './screens/Results'
@@ -14,16 +15,18 @@ import GenerationError from './screens/GenerationError'
  * App shell + state-based navigation (no router — §5). App also owns the
  * synthesis request + the generated kit: Capture builds the request, Loading
  * POSTs it to /api/generate (CP7), and the resulting kit flows to Results.
- * Flow: Brand voice → Inspiration (optional) → Capture → Loading → Results →
- * (New) → Capture. Loading branches to the error screen when synthesis fails (§7).
+ * Flow: Brand voice → Inspiration (optional) → Audit (the always-on payoff) →
+ * (Create) → Capture → Loading → Results. Audit Mode ends at the audit; Creation
+ * Mode continues into Capture. Loading branches to the error screen on failure.
  */
 const STEP_FOR_SCREEN = {
   voice: 0,
   inspiration: 1,
-  capture: 2,
-  loading: 2,
-  error: 2,
-  results: 3,
+  audit: 2,
+  capture: 3,
+  loading: 3,
+  error: 3,
+  results: 4,
 }
 
 function EchoMark() {
@@ -49,10 +52,11 @@ export default function App() {
   const { theme, toggle } = useTheme()
   const go = useCallback((next) => setScreen(next), [])
 
-  // Inspiration → Capture: keep what the creator added (or skipped) and move on.
+  // Inspiration → Audit: keep what the creator added (or skipped), then run the
+  // always-on audit — the first payoff, before any optional Creation Mode.
   const handleInspiration = useCallback((collected) => {
     setInspiration(collected)
-    setScreen('capture')
+    setScreen('audit')
   }, [])
 
   // Capture → Loading: stash the { input, image, brandVoice } request — plus any
@@ -102,10 +106,18 @@ export default function App() {
         {screen === 'inspiration' && (
           <Inspiration onContinue={handleInspiration} onBack={() => go('voice')} />
         )}
+        {screen === 'audit' && (
+          <Audit
+            inspiration={inspiration}
+            onCreate={() => go('capture')}
+            onBack={() => go('inspiration')}
+            onChangeVoice={() => go('voice')}
+          />
+        )}
         {screen === 'capture' && (
           <Capture
             onGenerate={handleGenerate}
-            onBack={() => go('inspiration')}
+            onBack={() => go('audit')}
             onChangeVoice={() => go('voice')}
           />
         )}

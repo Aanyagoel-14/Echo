@@ -1,9 +1,9 @@
 /**
- * Compact progress for the 4 user-facing steps (Loading folds into Capture).
+ * Compact progress for the 5 user-facing steps (Loading folds into Create).
  * The active step is a wide accent pill; past steps stay tinted, future ones
  * are border-grey. Purely presentational — App owns which step is active.
  */
-const STEPS = ['Brand voice', 'Inspiration', 'Capture', 'Results']
+const STEPS = ['Brand voice', 'Inspiration', 'Audit', 'Create', 'Results']
 
 export default function StepIndicator({ active }) {
   return (
