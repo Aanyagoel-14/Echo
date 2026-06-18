@@ -16,7 +16,7 @@
 import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { rmSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 
 import {
   NICHES,
@@ -32,7 +32,18 @@ import { harvestBatch, fetchGoogleTrends, fetchTikTokTrends } from '../src/lib/t
 // Point the file store at a throwaway path so we never touch the real cache.
 const TMP_STORE = join(tmpdir(), `echo-trends.test.${process.pid}.json`)
 process.env.ECHO_TRENDS_PATH = TMP_STORE
+// Point the Instagram source at a throwaway path too, defaulting to a file that
+// does NOT exist, so existing harvest tests never pick up a real worker output.
+const TMP_IG = join(tmpdir(), `echo-ig.test.${process.pid}.json`)
+const TMP_IG_ABSENT = join(tmpdir(), `echo-ig.absent.${process.pid}.json`)
+process.env.ECHO_INSTAGRAM_PATH = TMP_IG_ABSENT
 const { readBatch, writeBatch } = await import('../src/lib/trendStore.js')
+
+// All three live sources run off the injected fetch except Instagram (a file
+// read); this stub fails the network sources so an Instagram test isolates it.
+const offline = async () => {
+  throw new Error('offline')
+}
 
 let passed = 0
 const ok = (label) => {
@@ -229,5 +240,62 @@ const DAY2 = new Date('2026-06-19T00:00:00Z')
   ok('TikTok hashtags fold into the right niches, never crashing the harvest')
 }
 
+// ── Live source: Instagram co-occurrence (the worker's committed file) ──────
+{
+  console.log('Unit — Instagram co-occurrence folds the worker file into niches')
+
+  // Absent file ⇒ skipped, never throws out of the harvest.
+  process.env.ECHO_INSTAGRAM_PATH = TMP_IG_ABSENT
+  const noFile = await harvestBatch({ now: DAY1, live: true, fetch: offline })
+  assert.equal(noFile.source, 'mock', 'no IG file (and network offline) ⇒ mock')
+  assert.match(noFile.live.instagramError, /ENOENT|no such file/i, 'records the missing-file reason')
+
+  // A fresh worker file folds its niche-bucketed tags into those niches.
+  writeFileSync(
+    TMP_IG,
+    JSON.stringify({
+      version: 1,
+      harvestedAt: DAY1.toISOString(),
+      source: 'instaloader',
+      niches: { skincare: ['#barrierrepair', '#slugging'], finance: ['#sinkingfunds'] },
+    }),
+  )
+  process.env.ECHO_INSTAGRAM_PATH = TMP_IG
+  const merged = await harvestBatch({ now: DAY1, live: true, fetch: offline })
+  assert.equal(merged.source, 'mixed', 'a fresh IG file flips source to mixed')
+  assert.equal(merged.live.instagram, 3, 'records the IG tag count')
+  const skin = selectNiche(merged, 'skincare')
+  assert.ok(
+    skin.hashtags.some((h) => h.tag === '#slugging' && h.momentum === 95),
+    'an IG tag folds into its own niche at momentum 95',
+  )
+  const fin = selectNiche(merged, 'finance')
+  assert.ok(
+    fin.hashtags.some((h) => h.tag === '#sinkingfunds'),
+    'IG tags land in their bucketed niche, not general',
+  )
+
+  // A stale file (past the freshness window) is ignored.
+  writeFileSync(
+    TMP_IG,
+    JSON.stringify({
+      version: 1,
+      harvestedAt: new Date(DAY1.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      source: 'instaloader',
+      niches: { skincare: ['#staletag'] },
+    }),
+  )
+  const stale = await harvestBatch({ now: DAY1, live: true, fetch: offline })
+  assert.match(stale.live.instagramError, /stale/, 'a stale IG file is skipped')
+  assert.ok(
+    !selectNiche(stale, 'skincare').hashtags.some((h) => h.tag === '#staletag'),
+    'stale tags never leak into the batch',
+  )
+
+  process.env.ECHO_INSTAGRAM_PATH = TMP_IG_ABSENT // restore isolation
+  ok('Instagram co-occurrence merges when fresh, skips when absent/stale')
+}
+
 rmSync(TMP_STORE, { force: true })
+rmSync(TMP_IG, { force: true })
 console.log(`\nAll ${passed} trend-engine checks passed.`)

@@ -26,6 +26,16 @@ yarn-error.log*
 .idea/
 .vscode/
 
+# Instagram worker — local scrape output + saved Instaloader sessions. The
+# shared, app-read file is data/instagram-cooccurrence.json (committed by CI).
+worker/output/
+worker/*.session
+worker/*.session-*
+
+# Python artifacts (the worker is the only Python in the repo)
+__pycache__/
+*.pyc
+
 # Claude Code local settings
 .claude/
 

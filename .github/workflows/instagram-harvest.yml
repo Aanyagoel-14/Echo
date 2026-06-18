@@ -1,0 +1,49 @@
+name: Instagram trend harvest
+
+# The rate-limited Feature 1 source that can't run in a serverless function.
+# Runs daily (before the app's 06:00 UTC trends-harvest cron), scrapes Instagram
+# co-occurring hashtags slowly, and commits the result so the app's harvest can
+# read it. See worker/README.md.
+
+on:
+  schedule:
+    - cron: '0 5 * * *' # daily at 05:00 UTC
+  workflow_dispatch: {} # allow manual runs
+
+permissions:
+  contents: write # to commit the refreshed data file
+
+concurrency:
+  group: instagram-harvest
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install worker deps
+        run: pip install -r worker/requirements.txt
+
+      - name: Harvest Instagram co-occurrence
+        env:
+          IG_USERNAME: ${{ secrets.IG_USERNAME }}
+          IG_PASSWORD: ${{ secrets.IG_PASSWORD }}
+          HTTPS_PROXY: ${{ secrets.IG_HTTPS_PROXY }}
+          # Write where the app's harvest reads it (fetchInstagramCooccurrence).
+          ECHO_IG_OUTPUT: data/instagram-cooccurrence.json
+        run: python worker/instagram_harvest.py
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name "echo-bot"
+          git config user.email "echo-bot@users.noreply.github.com"
+          git add data/instagram-cooccurrence.json
+          git diff --cached --quiet || git commit -m "chore(trends): refresh Instagram co-occurrence [skip ci]"
+          git push

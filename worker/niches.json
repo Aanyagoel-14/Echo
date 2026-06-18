@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "seedsPerNiche": 3,
+  "niches": {
+    "skincare": [
+      "#skincare",
+      "#skintok",
+      "#glowup"
+    ],
+    "fitness": [
+      "#fitness",
+      "#gymtok",
+      "#fittok"
+    ],
+    "food": [
+      "#foodtok",
+      "#recipe",
+      "#easyrecipes"
+    ],
+    "fashion": [
+      "#fashiontok",
+      "#ootd",
+      "#styletok"
+    ],
+    "travel": [
+      "#traveltok",
+      "#travelhacks",
+      "#hiddengems"
+    ],
+    "tech": [
+      "#techtok",
+      "#gadgets",
+      "#ai"
+    ],
+    "edtech": [
+      "#edutok",
+      "#studytok",
+      "#edtech"
+    ],
+    "finance": [
+      "#fintok",
+      "#moneytok",
+      "#personalfinance"
+    ],
+    "gaming": [
+      "#gamingtok",
+      "#gamer",
+      "#gamingsetup"
+    ],
+    "home": [
+      "#hometok",
+      "#interiordesign",
+      "#homedecor"
+    ],
+    "parenting": [
+      "#momtok",
+      "#parentingtips",
+      "#toddlermom"
+    ],
+    "pets": [
+      "#pettok",
+      "#dogtok",
+      "#cattok"
+    ],
+    "business": [
+      "#businesstok",
+      "#entrepreneur",
+      "#smallbusiness"
+    ],
+    "art": [
+      "#arttok",
+      "#artistsoftiktok",
+      "#procreate"
+    ],
+    "music": [
+      "#musictok",
+      "#newmusic",
+      "#producertok"
+    ]
+  }
+}

@@ -22,14 +22,20 @@
  *                        timeout and fold the tags into the matching niches. Any
  *                        anti-bot / region block falls back silently to mock, the
  *                        same contract as Google — enrich when we can, never block.
- *   - Instaloader: SEAM (not implemented). Instagram rate-limits this hard and
- *                        needs a logged-in, proxied, slow session — a separate
- *                        scheduled worker, not a request-time function. Stubbed
- *                        below with the same signature so wiring it in is additive.
+ *   - Instaloader: LIVE via a separate worker. Instagram rate-limits this hard
+ *                        and needs a logged-in, proxied, slow session, so the
+ *                        scrape runs OUT OF BAND (worker/instagram_harvest.py, a
+ *                        daily GitHub Action) and commits a JSON file; here we
+ *                        only READ that file (fetchInstagramCooccurrence) and
+ *                        fold it in — same best-effort contract, no scraping at
+ *                        request time. Missing/stale file ⇒ silently skipped.
  *
  * Network impurity is isolated to THIS module so trends.js stays pure and
  * node-testable. `fetch` is injectable so tests run offline and deterministic.
  */
+
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 import { generateMockBatch, normalizeNiche, GENERIC_NICHE, NICHES } from './trends.js'
 
@@ -115,12 +121,38 @@ export async function fetchTikTokTrends({ fetch = globalThis.fetch, geo = 'US', 
   }
 }
 
-// SEAM: Instaloader co-occurring hashtags on top niche posts. Instagram rate-
-// limits this hard, so it must run slowly (≈once/day) with rotating proxies —
-// a separate worker, not a request-time function. Stubbed with the live
-// fetchers' signature so wiring it in later is purely additive.
-export async function fetchInstagramCooccurrence() {
-  throw new Error('not implemented: Instaloader needs a rate-limited proxied worker')
+// Where the Instagram worker's output lands (committed by the GitHub Action).
+// Resolved relative to this module so it works regardless of CWD; overridable.
+const DEFAULT_INSTAGRAM_PATH = fileURLToPath(
+  new URL('../../data/instagram-cooccurrence.json', import.meta.url),
+)
+// Ignore the worker's output once it ages past this — a stopped worker shouldn't
+// pin yesterday's-yesterday tags into the feed forever.
+const INSTAGRAM_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000
+
+/*
+ * Read the Instagram co-occurrence file produced by worker/instagram_harvest.py
+ * (the rate-limited source that can't run in a serverless function). Returns
+ * { harvestedAt, niches: { id: ['#tag', …] } }, or THROWS when the file is
+ * absent / malformed / stale — the caller (harvestBatch) treats that exactly
+ * like a failed live fetch and keeps the other signals. Reading a committed file
+ * is the MVP path; swap `readFile` for a Blob/Edge-Config read for durability
+ * (the contract here doesn't change).
+ */
+export function fetchInstagramCooccurrence({
+  path = process.env.ECHO_INSTAGRAM_PATH || DEFAULT_INSTAGRAM_PATH,
+  now = new Date(),
+  maxAgeMs = INSTAGRAM_MAX_AGE_MS,
+  readFile = readFileSync,
+} = {}) {
+  const data = JSON.parse(readFile(path, 'utf8')) // missing file ⇒ throws ⇒ skipped
+  if (!data || data.version !== 1 || !data.niches || typeof data.niches !== 'object') {
+    throw new Error('instagram cooccurrence: unexpected shape')
+  }
+  const ts = data.harvestedAt ? Date.parse(data.harvestedAt) : NaN
+  if (Number.isNaN(ts)) throw new Error('instagram cooccurrence: no timestamp')
+  if (now.getTime() - ts > maxAgeMs) throw new Error('instagram cooccurrence: stale')
+  return { harvestedAt: data.harvestedAt, niches: data.niches }
 }
 
 /*
@@ -149,32 +181,61 @@ function mergeLiveTerms(batch, terms) {
   return touched
 }
 
+// Add one live hashtag to a niche's pool at the front (live signals lead),
+// deduped case-insensitively and length-capped. Returns true if it was added.
+// Shared by every live-hashtag source so they merge identically.
+function pushTag(batch, id, tag, momentum) {
+  const slice = batch.niches[id]
+  if (!slice) return false
+  if (slice.hashtags.some((h) => h.tag.toLowerCase() === tag.toLowerCase())) return false
+  slice.hashtags = [{ tag, momentum }, ...slice.hashtags].slice(0, 8)
+  return true
+}
+
 /*
  * Fold live trending hashtags (TikTok) into a mock batch. Each tag is added to
  * the generic niche and, when it keyword-matches a specific niche, to that niche
- * too — at the top with max momentum (100), because it's trending *today*, ahead
- * of the date-seeded pool. Deduped against existing tags and length-capped so a
- * query slice stays small. Returns the set of niches it touched.
+ * too — at max momentum (100), because it's trending *today*, ahead of the
+ * date-seeded pool. Returns the set of niches it touched.
  */
 function mergeLiveHashtags(batch, tags) {
   const touched = new Set()
-  const addTag = (id, tag) => {
-    const slice = batch.niches[id]
-    if (!slice) return
-    if (!slice.hashtags.some((h) => h.tag.toLowerCase() === tag.toLowerCase())) {
-      slice.hashtags = [{ tag, momentum: 100 }, ...slice.hashtags].slice(0, 8)
-      touched.add(id)
-    }
-  }
-
   for (const raw of tags) {
     const tag = String(raw).trim()
     if (!tag) continue
-    addTag(GENERIC_NICHE, tag)
+    if (pushTag(batch, GENERIC_NICHE, tag, 100)) touched.add(GENERIC_NICHE)
     const id = normalizeNiche(tag)
-    if (id !== GENERIC_NICHE) addTag(id, tag)
+    if (id !== GENERIC_NICHE && pushTag(batch, id, tag, 100)) touched.add(id)
   }
   return touched
+}
+
+/*
+ * Fold Instagram co-occurrence (the worker's output) into a mock batch. The
+ * worker already buckets tags by niche, so each niche's tags go straight into
+ * that niche's pool (no re-bucketing) at momentum 95 — strong, just below
+ * TikTok's trending-today 100. Returns the set of niches it touched.
+ */
+function mergeInstagramTags(batch, niches) {
+  const touched = new Set()
+  for (const [id, tags] of Object.entries(niches || {})) {
+    if (!Array.isArray(tags)) continue
+    for (const raw of tags) {
+      const t = String(raw).trim()
+      if (!t) continue
+      const tag = t.startsWith('#') ? t : `#${t}`
+      if (pushTag(batch, id, tag, 95)) touched.add(id)
+    }
+  }
+  return touched
+}
+
+// Total tags across a niche→tags map — for the harvest's per-source summary.
+function countNicheTags(niches) {
+  return Object.values(niches || {}).reduce(
+    (n, tags) => n + (Array.isArray(tags) ? tags.length : 0),
+    0,
+  )
 }
 
 /*
@@ -183,7 +244,7 @@ function mergeLiveHashtags(batch, tags) {
  * — one source failing never affects the other or the mock baseline. `source`
  * reflects what made it in: 'mock' (all live skipped or failed) or 'mixed' (mock
  * + at least one live source). `live` records per-source outcome:
- *   { google?: number, error?: string, tiktok?: number, tiktokError?: string }
+ *   { google?, error?, tiktok?, tiktokError?, instagram?, instagramError? }
  * (`google`/`error` keep their original names so existing consumers/tests hold.)
  *
  * Options:
@@ -215,6 +276,16 @@ export async function harvestBatch({ now = new Date(), live = true, fetch = glob
     report.tiktok = tags.length
   } catch (err) {
     report.tiktokError = String(err && err.message ? err.message : err)
+  }
+
+  // Instagram co-occurrence → read the worker's committed file (no scraping at
+  // request time); fold each niche's tags into its pool. Absent/stale ⇒ skipped.
+  try {
+    const ig = fetchInstagramCooccurrence({ now })
+    if (mergeInstagramTags(batch, ig.niches).size) touchedAny = true
+    report.instagram = countNicheTags(ig.niches)
+  } catch (err) {
+    report.instagramError = String(err && err.message ? err.message : err)
   }
 
   batch.source = touchedAny ? 'mixed' : batch.source

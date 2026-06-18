@@ -22,9 +22,10 @@ export default defineConfig([
   {
     // Server-only code runs in Node, not the browser/React — give it Node
     // globals and skip the React-only fast-refresh rule. Covers the serverless
-    // functions (CP7) and the trend store, the one node-only (fs/process) lib
-    // that backs them (its pure siblings in src/lib stay browser-safe).
-    files: ['api/**/*.js', 'src/lib/trendStore.js'],
+    // functions (CP7) and the node-only (fs/process) trend libs that back them —
+    // the store and the harvest sources (which read the Instagram worker file).
+    // Their pure siblings in src/lib stay browser-safe.
+    files: ['api/**/*.js', 'src/lib/trendStore.js', 'src/lib/trendSources.js'],
     languageOptions: { globals: globals.node },
     rules: { 'react-refresh/only-export-components': 'off' },
   },

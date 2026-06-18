@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "icons": "node scripts/generate-icons.mjs",
+    "export:niches": "node scripts/export-niches.mjs",
     "test:trends": "node test/trends.test.mjs",
     "test:audit": "node test/audit.test.mjs"
   },

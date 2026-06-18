@@ -1,0 +1,3 @@
+# Echo Instagram co-occurrence worker.
+# Instaloader scrapes Instagram hashtag top-posts to read co-occurring tags.
+instaloader>=4.13,<5
