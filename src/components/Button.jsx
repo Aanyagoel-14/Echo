@@ -3,8 +3,9 @@
  * every screen stays consistent with the §4 design system.
  */
 const VARIANTS = {
-  primary: 'bg-accent text-white hover:bg-accent-hover',
-  secondary: 'border border-border bg-surface text-ink hover:border-accent/50',
+  primary: 'bg-accent text-white shadow-card hover:bg-accent-hover',
+  secondary:
+    'border border-border bg-surface text-ink shadow-card hover:border-accent/50',
   ghost: 'text-muted hover:text-ink',
 }
 

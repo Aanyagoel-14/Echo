@@ -20,9 +20,11 @@ export default defineConfig([
     },
   },
   {
-    // Serverless functions (CP7) run in Node, not the browser/React — give them
-    // Node globals and skip the React-only fast-refresh rule.
-    files: ['api/**/*.js'],
+    // Server-only code runs in Node, not the browser/React — give it Node
+    // globals and skip the React-only fast-refresh rule. Covers the serverless
+    // functions (CP7) and the trend store, the one node-only (fs/process) lib
+    // that backs them (its pure siblings in src/lib stay browser-safe).
+    files: ['api/**/*.js', 'src/lib/trendStore.js'],
     languageOptions: { globals: globals.node },
     rules: { 'react-refresh/only-export-components': 'off' },
   },

@@ -1,0 +1,4 @@
+# Tests + local-only personal fixtures are never needed for the build or
+# runtime. test/fixtures/ holds real personal social exports — keep the whole
+# test/ tree off Vercel's build servers entirely.
+test/

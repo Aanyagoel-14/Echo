@@ -1,3 +1,18 @@
+import { samplesToArray } from './brandVoice'
+
+// Defensive normalize of the optional inspiration payload to a stable shape:
+// trimmed reference text + image descriptors (no bytes/urls), capped at a few.
+function normalizeInspiration(inspiration) {
+  if (!inspiration || typeof inspiration !== 'object') return { refs: '', visuals: [] }
+  const refs = typeof inspiration.refs === 'string' ? inspiration.refs.trim() : ''
+  const visuals = Array.isArray(inspiration.visuals)
+    ? inspiration.visuals
+        .slice(0, 6)
+        .map((v) => ({ name: v?.name, type: v?.type, size: v?.size }))
+    : []
+  return { refs, visuals }
+}
+
 /*
  * Client → serverless endpoints. The single place that knows how to call Echo's
  * /api functions. Secrets live server-side only (§2) — these just POST JSON.
@@ -66,7 +81,9 @@ export async function distillVoiceProfile({ samples, posts, tone, platform } = {
  * the cloud model server-side. `voiceProfile` is the creator's distilled
  * voice.md (so the kit sounds like them); `formats` is which of reel/carousel/
  * thread to produce; `image`/`inspiration` carry compact base64 the vision model
- * reads. The returned kit only contains the formats that were requested.
+ * reads. The returned kit only contains the formats that were requested. When no
+ * model key is configured the endpoint returns an input-aware mock of the same
+ * shape, so generation always works — this client never changes either way.
  */
 export async function generateKit({
   input,
@@ -118,4 +135,44 @@ export async function generateCarouselImage({ title, body, brief, image, model }
   } finally {
     clearTimeout(timer)
   }
+}
+
+/*
+ * Client → audit endpoint (Feature 3). The single place that calls POST
+ * /api/audit. Sends the brand voice (samples normalized to the §6 string[]
+ * shape, same as generate), the parsed historical posts (Feature 2 output), an
+ * optional niche (the Page 2 Genre Selector pick / "Other" text), and any
+ * inspiration. The server reads today's trends from its own cache and returns
+ * the § Page-3 critique { markdown, sections, hashtags, meta }.
+ *
+ * Like generateKit, this request shape is the seam: when the real model is wired
+ * in server-side, this client code never changes.
+ */
+export async function requestAudit({ brandVoice, posts, niche, inspiration } = {}) {
+  const payload = {
+    brandVoice: {
+      tone: brandVoice?.tone ?? null,
+      samples: samplesToArray(brandVoice?.samples),
+      source: brandVoice?.source ?? null,
+    },
+    posts: Array.isArray(posts) ? posts.filter((p) => typeof p === 'string') : [],
+    niche: niche ?? null,
+    inspiration: normalizeInspiration(inspiration),
+  }
+  const res = await fetch('/api/audit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    throw new Error(`audit failed: ${res.status}`)
+  }
+
+  const audit = await res.json()
+  // Guard the shape so a bad response surfaces cleanly rather than crashing.
+  if (!audit?.markdown || !audit?.sections) {
+    throw new Error('audit: malformed response')
+  }
+  return audit
 }

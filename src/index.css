@@ -1,28 +1,55 @@
 @import 'tailwindcss';
 
 /*
- * Echo design system — §4 of CONTEXT.md.
- * Tailwind v4 is config-less: design tokens live here in @theme
- * (there is NO tailwind.config.js). These generate the utilities the app
- * uses everywhere: bg-bg / bg-surface / border-border /
- * bg-accent + hover:bg-accent-hover / text-ink / text-muted / text-accent.
+ * Echo design system — light-first (the redesign), electric-blue accent kept
+ * (iQOO nod, §4). Tailwind v4 is config-less: tokens live here in @theme and
+ * generate the utilities the app uses everywhere (bg-bg / bg-surface /
+ * border-border / bg-accent + hover:bg-accent-hover / text-ink / text-muted /
+ * text-accent / shadow-card).
+ *
+ * THEME SWITCHING: @theme defines the LIGHT palette as the default (in :root).
+ * `html[data-theme='dark']` re-declares the same custom properties to flip the
+ * whole app to dark — utilities resolve to var(--color-*), so overriding the
+ * vars cascades with zero class changes. The higher-specificity selector
+ * (html + attribute) reliably beats :root regardless of source order.
  */
 @theme {
-  --color-bg: #0b0b0f;
-  --color-surface: #15151c;
-  --color-border: #23232e;
+  /* Light (default): soft cards float on a faintly cool off-white, à la the
+     Social Mate / Looply inspo — airy, rounded, gentle shadows. */
+  --color-bg: #f4f6f9;
+  --color-surface: #ffffff;
+  --color-border: #e6e9ef;
   --color-accent: #2f6bff;
   --color-accent-hover: #1e54e6;
-  --color-ink: #f4f4f6;
-  --color-muted: #9a9aa6;
+  --color-ink: #14161d;
+  --color-muted: #697186;
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Soft elevation for cards — the inspo look (light: visible; dark: subtle). */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 20px -10px rgba(16, 24, 40, 0.14);
 
   /* Motion (§7, CP6): screen/panel entrance + the Echo "ripple" loader.
      Exposed as the animate-rise / animate-fade-in / animate-ripple utilities. */
   --animate-rise: rise 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-fade-in: fade-in 0.3s ease-out both;
   --animate-ripple: echo-ripple 1.9s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* Dark theme — flips the palette when <html data-theme="dark">. This is the
+   original §4 near-black + electric-blue, now the opt-in alternative. */
+html[data-theme='dark'] {
+  --color-bg: #0b0b0f;
+  --color-surface: #15151c;
+  --color-border: #23232e;
+  --color-ink: #f4f4f6;
+  --color-muted: #9a9aa6;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 26px -14px rgba(0, 0, 0, 0.65);
+  color-scheme: dark;
+}
+
+:root {
+  color-scheme: light;
 }
 
 html,
@@ -38,6 +65,8 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Theme flips shouldn't hard-cut — ease the background/ink across the toggle. */
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Screen/panel entrance — a brief fade + lift, replayed on navigation. */

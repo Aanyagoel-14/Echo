@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import Button from '../components/Button'
-import { TONE_PRESETS } from '../lib/brandVoice'
+import ImportPosts from '../components/ImportPosts'
+import { TONE_PRESETS, saveBrandVoice } from '../lib/brandVoice'
 import { distillVoiceProfile, normalisePosts } from '../lib/api'
 import { passThroughPosts } from '../lib/posts'
 import {
@@ -46,6 +47,14 @@ export default function VoiceProfileSetup({ onDone, onCancel }) {
   const toggleTone = (id) => setTone((t) => (t === id ? null : id))
   const togglePlatform = (id) => setPlatform((p) => (p === id ? null : id))
 
+  // Imported posts (a platform export, parsed in-browser) append into the paste
+  // box just like a manual paste, then feed the distiller and the audit bridge.
+  const handleImported = ({ posts, source }) => {
+    const text = posts.join('\n\n')
+    setSamples((s) => (s.trim() ? `${s.trim()}\n\n${text}` : text))
+    if (source) setPlatform(source)
+  }
+
   async function build() {
     const text = samples.trim()
     if (text.length < 40) {
@@ -54,6 +63,10 @@ export default function VoiceProfileSetup({ onDone, onCancel }) {
     }
     setError(null)
     setBusy(true)
+    // Bridge to the Audit (Feature 3): persist the raw posts as brandVoice
+    // samples so the always-on audit can critique the creator's actual posts.
+    // The distilled voiceProfile stays the first-class artifact for synthesis.
+    saveBrandVoice({ tone, samples: text, source: platform })
     let artifact
     try {
       // Smart paste (Phase 1): clean + structure the raw paste into posts.json
@@ -129,6 +142,10 @@ export default function VoiceProfileSetup({ onDone, onCancel }) {
           do this once.
         </p>
       </div>
+
+      {/* Import posts from a platform export (read in-browser, never uploaded);
+          they drop into the paste box below, then feed the distiller + audit. */}
+      <ImportPosts onImported={handleImported} />
 
       <div className="space-y-2">
         <label htmlFor="samples" className="text-sm font-medium text-muted">

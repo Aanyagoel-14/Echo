@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import StepIndicator from './components/StepIndicator'
+import ThemeToggle from './components/ThemeToggle'
+import { useTheme } from './lib/theme'
+import { EMPTY_INSPIRATION } from './lib/inspiration'
 import VoiceProfileSetup from './screens/VoiceProfileSetup'
+import Inspiration from './screens/Inspiration'
+import Audit from './screens/Audit'
 import Capture from './screens/Capture'
 import Loading from './screens/Loading'
 import Results from './screens/Results'
@@ -12,12 +17,21 @@ import { hasVoiceProfile } from './lib/voiceProfile'
  * synthesis request + the generated kit: Capture builds the request, Loading
  * POSTs it to /api/generate (CP7), and the resulting kit flows to Results.
  *
- * Flow (§0.1 — set up once, create every day):
- *   first run (no voice.md) → Voice Profile builder → Capture → …
- *   returning (voice.md found) → straight to Capture, profile auto-injected.
+ * Flow (§0.1 + Audit): first run (no voice.md) → Voice Profile builder →
+ * Inspiration (optional) → Audit (the always-on payoff) → (Create) → Capture →
+ * Loading → Results. Returning creators (voice.md found) skip setup and land on
+ * the Audit. Audit Mode ends at the audit; Creation Mode continues into Capture.
  * Loading branches to the error screen when synthesis fails (§7).
  */
-const STEP_FOR_SCREEN = { voice: 0, capture: 1, loading: 1, error: 1, results: 2 }
+const STEP_FOR_SCREEN = {
+  voice: 0,
+  inspiration: 1,
+  audit: 2,
+  capture: 3,
+  loading: 3,
+  error: 3,
+  results: 4,
+}
 
 function EchoMark() {
   return (
@@ -33,20 +47,36 @@ function EchoMark() {
 }
 
 export default function App() {
-  // Boot gate (§0.1): returning creators (a stored voice.md) skip setup and land
-  // on Capture; first-run users start in the Voice Profile builder.
+  // Boot gate (§0.1 + Audit): returning creators (a stored voice.md) skip setup
+  // and land on the always-on Audit; first-run users start in the Voice Profile
+  // builder, then flow through Inspiration into the Audit.
   const [screen, setScreen] = useState(() =>
-    hasVoiceProfile() ? 'capture' : 'voice',
+    hasVoiceProfile() ? 'audit' : 'voice',
   )
   const [request, setRequest] = useState(null)
   const [kit, setKit] = useState(null)
+  // Optional reference material gathered on the Inspiration screen; merged into
+  // the request at generate time so it can shape synthesis (wired server-side).
+  const [inspiration, setInspiration] = useState(EMPTY_INSPIRATION)
+  const { theme, toggle } = useTheme()
   const go = useCallback((next) => setScreen(next), [])
 
-  // Capture → Loading: stash the { input, image, brandVoice } request and start.
-  const handleGenerate = useCallback((req) => {
-    setRequest(req)
-    setScreen('loading')
+  // Inspiration → Audit: keep what the creator added (or skipped), then run the
+  // always-on audit — the first payoff, before any optional Creation Mode.
+  const handleInspiration = useCallback((collected) => {
+    setInspiration(collected)
+    setScreen('audit')
   }, [])
+
+  // Capture → Loading: stash the { input, image, brandVoice } request — plus any
+  // inspiration — and start synthesis.
+  const handleGenerate = useCallback(
+    (req) => {
+      setRequest({ ...req, inspiration })
+      setScreen('loading')
+    },
+    [inspiration],
+  )
 
   // Loading → Results: keep the kit the endpoint returned and show it.
   const handleDone = useCallback((generatedKit) => {
@@ -71,24 +101,49 @@ export default function App() {
             Echo
           </span>
         </div>
-        <StepIndicator active={STEP_FOR_SCREEN[screen]} />
+        <div className="flex items-center gap-3">
+          <StepIndicator active={STEP_FOR_SCREEN[screen]} />
+          <ThemeToggle theme={theme} onToggle={toggle} />
+        </div>
       </header>
 
       {/* key={screen} remounts the body on each nav, replaying the entrance. */}
       <div key={screen} className="flex flex-1 flex-col animate-rise">
         {screen === 'voice' && (
           <VoiceProfileSetup
-            onDone={() => go('capture')}
-            onCancel={() => go('capture')}
+            onDone={() => go('inspiration')}
+            onCancel={() => go('inspiration')}
+          />
+        )}
+        {screen === 'inspiration' && (
+          <Inspiration onContinue={handleInspiration} onBack={() => go('voice')} />
+        )}
+        {screen === 'audit' && (
+          <Audit
+            inspiration={inspiration}
+            onCreate={() => go('capture')}
+            onBack={() => go('inspiration')}
+            onChangeVoice={() => go('voice')}
           />
         )}
         {screen === 'capture' && (
-          <Capture onGenerate={handleGenerate} onEditVoice={() => go('voice')} />
+          <Capture
+            onGenerate={handleGenerate}
+            onBack={() => go('audit')}
+            onChangeVoice={() => go('voice')}
+          />
         )}
         {screen === 'loading' && (
           <Loading request={request} onDone={handleDone} onError={handleError} />
         )}
-        {screen === 'results' && <Results kit={kit} onNew={() => go('capture')} />}
+        {screen === 'results' && (
+          <Results
+            kit={kit}
+            brandVoice={request?.brandVoice}
+            onNew={() => go('capture')}
+            onChangeVoice={() => go('voice')}
+          />
+        )}
         {screen === 'error' && (
           <GenerationError
             onRetry={() => go('loading')}

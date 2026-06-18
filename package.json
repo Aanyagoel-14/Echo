@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "test:trends": "node test/trends.test.mjs",
+    "test:audit": "node test/audit.test.mjs"
   },
   "dependencies": {
     "react": "^19.2.6",

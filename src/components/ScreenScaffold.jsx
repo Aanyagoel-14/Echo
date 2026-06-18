@@ -7,7 +7,7 @@ export default function ScreenScaffold({ icon, title, subtitle, children }) {
   return (
     <section className="flex flex-1 flex-col">
       <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-surface text-accent">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-surface text-accent shadow-card">
           {icon}
         </div>
         <div className="space-y-2">

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Button from '../components/Button'
+import VoiceTag from '../components/VoiceTag'
 import { loadVoiceProfile } from '../lib/voiceProfile'
 import { compressImage } from '../lib/image'
 
@@ -57,7 +58,7 @@ function PlusIcon() {
  * until at least one is provided, then hands the request up to be POSTed to
  * /api/generate (CP7). The endpoint returns mock JSON until the event.
  */
-export default function Capture({ onGenerate, onEditVoice }) {
+export default function Capture({ onGenerate, onBack, onChangeVoice }) {
   const [photo, setPhoto] = useState(null)
   const [photoUrl, setPhotoUrl] = useState(null)
   const [brief, setBrief] = useState('')
@@ -169,14 +170,17 @@ export default function Capture({ onGenerate, onEditVoice }) {
 
   return (
     <form className="flex flex-1 flex-col gap-6" onSubmit={handleSubmit}>
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight text-ink">
-          What are you promoting?
-        </h1>
-        <p className="text-pretty leading-relaxed text-muted">
-          Snap a product photo or jot a one-line brief — either is enough for
-          Echo to build your kit.
-        </p>
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold tracking-tight text-ink">
+            What are you promoting?
+          </h1>
+          <p className="text-pretty leading-relaxed text-muted">
+            Snap a product photo or jot a one-line brief — either is enough for
+            Echo to build your kit.
+          </p>
+        </div>
+        <VoiceTag onChange={onChangeVoice} />
       </div>
 
       <div>
@@ -190,7 +194,7 @@ export default function Capture({ onGenerate, onEditVoice }) {
           className="peer sr-only"
         />
         {photoUrl ? (
-          <div className="relative h-44 overflow-hidden rounded-2xl border border-border bg-surface">
+          <div className="relative h-44 overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
             <img
               src={photoUrl}
               alt="Selected product"
@@ -220,7 +224,7 @@ export default function Capture({ onGenerate, onEditVoice }) {
         ) : (
           <label
             htmlFor={PHOTO_INPUT_ID}
-            className="flex h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-surface text-center transition duration-150 hover:border-accent/50 active:scale-[0.99] peer-focus-visible:border-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent/50"
+            className="flex h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-surface text-center shadow-card transition duration-150 hover:border-accent/50 active:scale-[0.99] peer-focus-visible:border-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent/50"
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-bg text-accent">
               <CameraIcon />
@@ -253,7 +257,7 @@ export default function Capture({ onGenerate, onEditVoice }) {
           maxLength={200}
           enterKeyHint="go"
           placeholder="e.g. New matte steel water bottle for gym-goers"
-          className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-base leading-relaxed text-ink placeholder:text-muted/60 focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="w-full rounded-2xl border border-border bg-surface px-4 py-3 text-base leading-relaxed text-ink shadow-card placeholder:text-muted/60 focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         />
       </div>
 
@@ -360,8 +364,8 @@ export default function Capture({ onGenerate, onEditVoice }) {
               ? 'Pick at least one format to generate.'
               : `In your voice — ${formatSummary(formats)}.`}
         </p>
-        <Button variant="ghost" onClick={onEditVoice}>
-          Edit voice profile
+        <Button variant="ghost" onClick={onBack}>
+          Back to audit
         </Button>
       </div>
     </form>
