@@ -27,7 +27,7 @@ import {
   selectNiche,
   REFRESH_INTERVAL_MS,
 } from '../src/lib/trends.js'
-import { harvestBatch, fetchGoogleTrends } from '../src/lib/trendSources.js'
+import { harvestBatch, fetchGoogleTrends, fetchTikTokTrends } from '../src/lib/trendSources.js'
 
 // Point the file store at a throwaway path so we never touch the real cache.
 const TMP_STORE = join(tmpdir(), `echo-trends.test.${process.pid}.json`)
@@ -182,6 +182,51 @@ const DAY2 = new Date('2026-06-19T00:00:00Z')
   assert.equal(safe.source, 'mock', 'live failure falls back to mock')
   assert.match(safe.live.error, /network down/, 'the failure reason is recorded')
   ok('a live-source failure degrades gracefully to mock')
+}
+
+// ── Live source: TikTok hashtags fold into the matching niche tag pools ─────
+{
+  console.log('Unit — TikTok trending hashtags merge into the right niches')
+  const TT = {
+    data: {
+      list: [
+        { hashtag_name: 'skincare' },
+        { hashtag_name: '#beauty' },
+        { hashtag_name: 'fyp' },
+      ],
+    },
+  }
+  const ttFetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => TT,
+    text: async () => JSON.stringify(TT),
+  })
+
+  const tags = await fetchTikTokTrends({ fetch: ttFetch })
+  assert.deepEqual(
+    tags,
+    ['#skincare', '#beauty', '#fyp'],
+    'hashtag_name parses, "#" is normalized, deduped',
+  )
+
+  // harvestBatch with this stub: Google parse finds no <item>s (degrades), TikTok
+  // hashtags fold in — proving the two sources are independent and best-effort.
+  const merged = await harvestBatch({ now: DAY1, live: true, fetch: ttFetch })
+  assert.equal(merged.source, 'mixed', 'a live hashtag flips source to mixed')
+  assert.equal(merged.live.tiktok, 3, 'records the tiktok tag count')
+
+  const skin = selectNiche(merged, 'skincare')
+  assert.ok(
+    skin.hashtags.some((h) => h.tag === '#beauty' && h.momentum === 100),
+    'a niche-matching tag folds into that niche at max momentum',
+  )
+  const general = selectNiche(merged, 'totally unrelated words')
+  assert.ok(
+    general.hashtags.some((h) => h.tag === '#fyp'),
+    'a generic tag lands in the general niche',
+  )
+  ok('TikTok hashtags fold into the right niches, never crashing the harvest')
 }
 
 rmSync(TMP_STORE, { force: true })
