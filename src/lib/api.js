@@ -77,13 +77,16 @@ export async function distillVoiceProfile({ samples, posts, tone, platform } = {
 
 /*
  * Synthesis endpoint (§7). POSTs { input, formats, image, inspiration,
- * voiceProfile } and gets back the §6 content kit, voice-injected and built by
- * the cloud model server-side. `voiceProfile` is the creator's distilled
- * voice.md (so the kit sounds like them); `formats` is which of reel/carousel/
- * thread to produce; `image`/`inspiration` carry compact base64 the vision model
- * reads. The returned kit only contains the formats that were requested. When no
- * model key is configured the endpoint returns an input-aware mock of the same
- * shape, so generation always works — this client never changes either way.
+ * voiceProfile, audit } and gets back the §6 content kit, voice-injected and
+ * built by the cloud model server-side. `voiceProfile` is the creator's
+ * distilled voice.md (so the kit sounds like them); `formats` is which of reel/
+ * carousel/thread to produce; `image`/`inspiration` carry compact base64 the
+ * vision model reads; `audit` is the distilled Page 3 direction ({ pivot, niche,
+ * hashtags }) so the new post continues the audit's strategy — optional, null
+ * when generating without a prior audit. The returned kit only contains the
+ * formats that were requested. When no model key is configured the endpoint
+ * returns an input-aware mock of the same shape, so generation always works —
+ * this client never changes either way.
  */
 export async function generateKit({
   input,
@@ -91,11 +94,12 @@ export async function generateKit({
   image,
   inspiration,
   voiceProfile,
+  audit,
 } = {}) {
   const res = await fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input, formats, image, inspiration, voiceProfile }),
+    body: JSON.stringify({ input, formats, image, inspiration, voiceProfile, audit }),
   })
 
   if (!res.ok) {

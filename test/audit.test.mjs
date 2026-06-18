@@ -25,6 +25,7 @@ import {
   inferNiche,
   extractHashtags,
   auditHashtags,
+  summarizeAuditForGeneration,
 } from '../src/lib/audit.js'
 import { generateMockBatch, selectNiche, NICHES, GENERIC_NICHE } from '../src/lib/trends.js'
 import { detectAndExtract } from '../src/lib/importAdapters.js'
@@ -173,6 +174,35 @@ const VOICE = { tone: 'playful', samples: ['glow tips daily ✨'], source: 'inst
   const noInsp = buildAuditPrompt({ brandVoice: VOICE, posts: SKIN_POSTS, trends })
   assert.match(noInsp, /Inspiration \(Optional\): \(none provided\)/, 'omitted inspiration reads "(none provided)"')
   ok('the model seam carries the verbatim spec prompt with inputs filled in')
+}
+
+// ── summarizeAuditForGeneration: the F4 handoff is compact + faithful ──────
+{
+  console.log('Unit — summarizeAuditForGeneration distills the audit for generation')
+  const trends = selectNiche(BATCH, 'skincare')
+  const audit = generateMockAudit({ brandVoice: VOICE, posts: SKIN_POSTS, trends })
+  const ctx = summarizeAuditForGeneration(audit)
+
+  assert.ok(ctx, 'returns a context for a real audit')
+  assert.equal(typeof ctx.pivot, 'string', 'carries the strategic pivot as plain text')
+  assert.ok(!ctx.pivot.includes('**'), 'pivot is stripped of markdown bold')
+  assert.equal(ctx.niche, trends.label, 'carries the niche label, not the id')
+  assert.ok(Array.isArray(ctx.hashtags) && ctx.hashtags.length >= 1, 'carries trend-backed tags')
+  assert.ok(ctx.hashtags.length <= 8, 'the tag list is capped')
+
+  // Every forwarded tag is genuinely one the audit said to keep or add.
+  const expected = new Set(
+    [...audit.hashtags.keep, ...audit.hashtags.add.map((h) => h.tag)].map((t) => t.toLowerCase()),
+  )
+  assert.ok(
+    ctx.hashtags.every((t) => expected.has(t.toLowerCase())),
+    'forwarded tags ⊆ the audit keep/add (trend-backed)',
+  )
+
+  // No audit ⇒ null, so generation falls back to its plain, audit-free prompt.
+  assert.equal(summarizeAuditForGeneration(null), null, 'null audit ⇒ null context')
+  assert.equal(summarizeAuditForGeneration({}), null, 'empty audit ⇒ null context')
+  ok('the audit→generation handoff is compact, plain-text, and faithful')
 }
 
 // ── End-to-end: real export → parse (F2) → trends (F1) → audit (F3) ────────

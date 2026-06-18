@@ -11,6 +11,7 @@ import Loading from './screens/Loading'
 import Results from './screens/Results'
 import GenerationError from './screens/GenerationError'
 import { hasVoiceProfile } from './lib/voiceProfile'
+import { summarizeAuditForGeneration } from './lib/audit'
 
 /*
  * App shell + state-based navigation (no router — §5). App also owns the
@@ -55,6 +56,11 @@ export default function App() {
   )
   const [request, setRequest] = useState(null)
   const [kit, setKit] = useState(null)
+  // The Page 3 critique, lifted from the Audit screen once it resolves, so the
+  // Creation Mode generate (Page 4 → Page 5) can continue the same strategy —
+  // the audit and the new post read as one story (§F4). Null until/unless the
+  // audit succeeds, so generation falls back to its plain behaviour otherwise.
+  const [auditResult, setAuditResult] = useState(null)
   // Optional reference material gathered on the Inspiration screen; merged into
   // the request at generate time so it can shape synthesis (wired server-side).
   const [inspiration, setInspiration] = useState(EMPTY_INSPIRATION)
@@ -69,13 +75,19 @@ export default function App() {
   }, [])
 
   // Capture → Loading: stash the { input, image, brandVoice } request — plus any
-  // inspiration — and start synthesis.
+  // inspiration and the distilled audit direction — and start synthesis. The
+  // audit is summarized to a compact { pivot, niche, hashtags } here so the kit
+  // continues the audit's strategy without bloating the payload.
   const handleGenerate = useCallback(
     (req) => {
-      setRequest({ ...req, inspiration })
+      setRequest({
+        ...req,
+        inspiration,
+        audit: summarizeAuditForGeneration(auditResult),
+      })
       setScreen('loading')
     },
-    [inspiration],
+    [inspiration, auditResult],
   )
 
   // Loading → Results: keep the kit the endpoint returned and show it.
@@ -121,6 +133,7 @@ export default function App() {
         {screen === 'audit' && (
           <Audit
             inspiration={inspiration}
+            onAuditReady={setAuditResult}
             onCreate={() => go('capture')}
             onBack={() => go('inspiration')}
             onChangeVoice={() => go('voice')}

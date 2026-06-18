@@ -410,6 +410,45 @@ function describeInspiration(inspiration) {
   return parts.join(' ')
 }
 
+// ── Audit → Generation handoff ───────────────────────────────────────────────
+
+// Strip the bits of inline Markdown the critique uses (**bold**, *italic*) so a
+// section reads as plain instruction text when fed to the generation model.
+function stripInlineMarkdown(s) {
+  return String(s || '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/*
+ * Distill an audit (the /api/audit response shape) into the compact creative
+ * direction the Generation Model (F4) needs, so a new post continues the same
+ * strategy the audit set out — "audit and new post read as one story" (Page 3 →
+ * Page 5). Pure and tiny on purpose: it ships only the Strategic Pivot, the
+ * niche label, and the trend-backed tags (keep + add), never the whole critique,
+ * so the /api/generate payload and token cost stay small. Returns null when
+ * there's nothing actionable (e.g. the audit failed), so generation falls back
+ * to its plain, audit-free behaviour unchanged.
+ */
+export function summarizeAuditForGeneration(audit) {
+  if (!audit || typeof audit !== 'object') return null
+  const pivot = stripInlineMarkdown(audit.sections?.strategicPivot)
+  const niche = typeof audit.meta?.label === 'string' ? audit.meta.label : null
+  const ht = audit.hashtags || {}
+  const keep = Array.isArray(ht.keep) ? ht.keep : []
+  const add = Array.isArray(ht.add)
+    ? ht.add.map((h) => (typeof h === 'string' ? h : h?.tag)).filter(Boolean)
+    : []
+  // Trend-backed tags worth weaving in: ones they already use that still land
+  // (keep) + the hot ones they're missing (add), deduped, kept short.
+  const hashtags = [...new Set([...keep, ...add])].slice(0, 8)
+
+  if (!pivot && !niche && !hashtags.length) return null
+  return { pivot: pivot || null, niche, hashtags }
+}
+
 /*
  * Assemble the EXACT system prompt the spec specifies, with the four inputs
  * interpolated. This is the seam for the real LLM (a cheap model — Gemini Flash /

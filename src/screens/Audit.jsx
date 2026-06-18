@@ -40,6 +40,7 @@ const SECTIONS = [
 
 export default function Audit({
   inspiration,
+  onAuditReady,
   onCreate,
   onBack,
   onChangeVoice,
@@ -81,6 +82,9 @@ export default function Audit({
       } else {
         setAudit(result)
         setStatus('ready')
+        // Hand the critique up so Creation Mode can carry it into generation —
+        // the audit and the new post then read as one story (Page 3 → Page 5).
+        onAuditReady?.(result)
       }
     }
 
@@ -88,7 +92,7 @@ export default function Audit({
     return () => {
       active = false
     }
-  }, [nonce, inspiration, minVisible])
+  }, [nonce, inspiration, minVisible, onAuditReady])
 
   // Step the status line through the stages while the audit is in flight.
   useEffect(() => {

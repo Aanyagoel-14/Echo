@@ -35,7 +35,28 @@ const FORMAT_SCHEMA = {
   }`,
 }
 
-function buildSystem(formats, voiceMd) {
+// Fold the distilled Page 3 audit ({ pivot, niche, hashtags }) into a short
+// creative-direction block, so the new post continues the audit's strategy and
+// the two read as one story (§F4). Returns '' when there's no audit, so the
+// prompt is byte-for-byte the pre-audit prompt in the audit-free path.
+function buildAuditBlock(audit) {
+  if (!audit) return ''
+  const lines = []
+  if (audit.pivot) lines.push(`- Strategic direction: ${audit.pivot}`)
+  if (audit.niche) lines.push(`- Niche: ${audit.niche}`)
+  if (audit.hashtags?.length) {
+    lines.push(
+      `- Trend-backed hashtags to weave in where the format allows (Instagram caption: 3–5; X/threads: none): ${audit.hashtags.join(' ')}`,
+    )
+  }
+  if (!lines.length) return ''
+  return `
+
+This post continues an ongoing content strategy. Honor this creative direction from the creator's most recent content audit so the audit and this new post read as one continuous strategy — never name the audit or sound like a report:
+${lines.join('\n')}`
+}
+
+function buildSystem(formats, voiceMd, audit) {
   const voiceBlock = voiceMd
     ? `The creator's voice profile (their voice.md) follows. Write STRICTLY in this voice — match its rhythm, signature words, emoji/punctuation habits, energy, and hook shapes. Never sound generic or corporate.
 
@@ -48,7 +69,7 @@ ${voiceMd.trim().slice(0, 4000)}
 
   return `You are Echo, a short-form content engine for one creator. You turn a product or topic into ready-to-post content that sounds EXACTLY like the creator.
 
-${voiceBlock}
+${voiceBlock}${buildAuditBlock(audit)}
 
 Rules:
 - Ground every line in the provided product photo and/or brief. If a photo is given, work from what is actually in it (don't invent a different product).
@@ -143,6 +164,18 @@ function coerceThread(t) {
 
 const COERCE = { reel: coerceReel, carousel: coerceCarousel, thread: coerceThread }
 
+// Coerce the client-supplied audit direction to a trusted compact shape, or
+// null. The client sends summarizeAuditForGeneration()'s output, but this is the
+// trust boundary — re-validate types and cap the tag list defensively.
+function normalizeAudit(a) {
+  if (!a || typeof a !== 'object') return null
+  const pivot = asString(a.pivot)
+  const niche = asString(a.niche)
+  const hashtags = asStringArray(a.hashtags).slice(0, 8)
+  if (!pivot && !niche && !hashtags.length) return null
+  return { pivot, niche, hashtags }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -150,9 +183,10 @@ export default async function handler(req, res) {
     return
   }
 
-  const { input: rawInput, formats: rawFormats, image, inspiration, voiceProfile } =
+  const { input: rawInput, formats: rawFormats, image, inspiration, voiceProfile, audit: rawAudit } =
     req.body ?? {}
   const input = asString(rawInput)
+  const audit = normalizeAudit(rawAudit)
 
   // Normalize requested formats; default to all three if unspecified.
   let formats = Array.isArray(rawFormats)
@@ -185,6 +219,7 @@ export default async function handler(req, res) {
     inspirationCount: Array.isArray(inspiration) ? inspiration.length : 0,
     voiceChars: voiceMd.length,
     voiceEngine: voiceProfile?.source?.engine ?? null,
+    hasAudit: Boolean(audit),
   })
 
   try {
@@ -202,7 +237,7 @@ export default async function handler(req, res) {
         temperature: 0.8,
         response_format: { type: 'json_object' },
         messages: [
-          { role: 'system', content: buildSystem(formats, voiceMd) },
+          { role: 'system', content: buildSystem(formats, voiceMd, audit) },
           {
             role: 'user',
             content: buildUserContent({ input, image, inspiration, formats }),
