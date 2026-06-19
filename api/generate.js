@@ -17,6 +17,7 @@
 
 import { resolveImageModel } from '../src/lib/openrouterImages.js'
 import { chatCompletions, isModelConfigured } from '../src/lib/llm.js'
+import { enforceRateLimit } from '../src/lib/rateLimit.js'
 
 const ALL_FORMATS = ['reel', 'carousel', 'thread']
 
@@ -29,7 +30,9 @@ const FORMAT_SCHEMA = {
     "shotList": ["exactly 5 strings, each 'M:SS description' of one shot"]
   }`,
   carousel: `"carousel": {
-    "slides": [ { "title": "string", "body": "string" } ]  // exactly 5 slides, slide 1 is the hook, last is the CTA
+    "slides": [ { "title": "string", "body": "string" } ],  // exactly 5 slides, slide 1 is the hook, last is the CTA
+    "caption": "string — the Instagram caption that runs beneath the carousel, in the creator's voice (1–3 sentences, ending on a CTA or question)",
+    "hashtags": ["3–5 strings — on-topic Instagram hashtags, each starting with #"]
   }`,
   thread: `"thread": {
     "tweets": ["5–6 strings, each one post; tweet 1 is the hook, last has the CTA"]
@@ -147,13 +150,43 @@ function coerceReel(r) {
   return { hook, script, shotList }
 }
 
-function coerceCarousel(c) {
+// Normalize a hashtag list (from the model, then the audit as fill) to clean,
+// deduped `#tag` form, capped at 5 — the §9.7 Instagram budget. Bare words gain
+// a '#'; whitespace is stripped so "# tag" / "tag" both become "#tag".
+function normalizeHashtags(list, fallback) {
+  const seen = new Set()
+  const out = []
+  const push = (raw) => {
+    let tag = asString(raw).replace(/\s+/g, '')
+    if (!tag) return
+    if (!tag.startsWith('#')) tag = `#${tag.replace(/^#+/, '')}`
+    if (tag.length < 2) return
+    const key = tag.toLowerCase()
+    if (!seen.has(key)) {
+      seen.add(key)
+      out.push(tag)
+    }
+  }
+  for (const t of Array.isArray(list) ? list : []) push(t)
+  for (const t of Array.isArray(fallback) ? fallback : []) push(t)
+  return out.slice(0, 5)
+}
+
+function coerceCarousel(c, audit) {
   if (!c || typeof c !== 'object') return null
   const slides = (Array.isArray(c.slides) ? c.slides : [])
     .map((s) => ({ title: asString(s?.title), body: asString(s?.body) }))
     .filter((s) => s.title || s.body)
   if (!slides.length) return null
-  return { slides }
+  // §9.7: a carousel ships with an Instagram caption + 3–5 hashtags. The model
+  // writes both; if it skips the tags, fall back to the audit's trend-backed set
+  // so the caption is never left bare (F4 ↔ F5 — the audit's tags carry through).
+  const out = { slides }
+  const caption = asString(c.caption)
+  if (caption) out.caption = caption
+  const hashtags = normalizeHashtags(c.hashtags, audit?.hashtags)
+  if (hashtags.length) out.hashtags = hashtags
+  return out
 }
 
 function coerceThread(t) {
@@ -183,6 +216,11 @@ export default async function handler(req, res) {
     res.status(405).json({ error: 'Method not allowed' })
     return
   }
+
+  // Throttle before any work: this public, no-auth endpoint bills a real model
+  // key (text + vision) on every call, so cap per-visitor and global rate up
+  // front. A 429 is fully written here — bail out.
+  if (enforceRateLimit(req, res, { route: 'generate' })) return
 
   const { input: rawInput, formats: rawFormats, image, inspiration, voiceProfile, audit: rawAudit } =
     req.body ?? {}
@@ -228,7 +266,11 @@ export default async function handler(req, res) {
   try {
     const { ok, status, data, error } = await chatCompletions({
       model,
-      max_tokens: 2000,
+      // Headroom for a full reel + 5-slide carousel (+caption/hashtags) + thread.
+      // 2000 truncated the JSON for multi-format kits → 502; observed usage with
+      // thinking off is ~1k, so 4000 is comfortable margin (llm.js disables the
+      // thinking tokens that used to eat this budget).
+      max_tokens: 4000,
       temperature: 0.8,
       response_format: { type: 'json_object' },
       messages: [
@@ -260,7 +302,9 @@ export default async function handler(req, res) {
     // Keep only the requested, renderable formats.
     const kit = {}
     for (const f of formats) {
-      const value = COERCE[f](parsed[f])
+      // Only coerceCarousel reads the 2nd arg (audit tags as a hashtag fallback);
+      // coerceReel/coerceThread ignore it.
+      const value = COERCE[f](parsed[f], audit)
       if (value) kit[f] = value
     }
 

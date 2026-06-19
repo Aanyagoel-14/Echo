@@ -11,9 +11,11 @@
     "icons": "node scripts/generate-icons.mjs",
     "export:niches": "node scripts/export-niches.mjs",
     "test:trends": "node test/trends.test.mjs",
-    "test:audit": "node test/audit.test.mjs"
+    "test:audit": "node test/audit.test.mjs",
+    "test:ratelimit": "node test/ratelimit.test.mjs"
   },
   "dependencies": {
+    "@vercel/blob": "^2.4.1",
     "google-auth-library": "^10.7.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"

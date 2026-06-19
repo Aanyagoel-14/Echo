@@ -22,7 +22,7 @@
  */
 
 import { generateMockBatch, isStale, selectNiche } from '../src/lib/trends.js'
-import { readBatch } from '../src/lib/trendStore.js'
+import { readBatchAsync } from '../src/lib/trendStore.js'
 import {
   generateMockAudit,
   inferNiche,
@@ -31,6 +31,7 @@ import {
   countAuditSections,
 } from '../src/lib/audit.js'
 import { chatCompletions, isModelConfigured } from '../src/lib/llm.js'
+import { enforceRateLimit } from '../src/lib/rateLimit.js'
 
 // The model may wrap JSON in prose/fences despite instructions — extract it.
 function parseModelJson(content) {
@@ -81,7 +82,10 @@ async function runModelAudit({ brandVoice, posts, trends, inspiration }) {
 
   const { ok, status, data, error } = await chatCompletions({
     model,
-    max_tokens: 1500,
+    // Headroom for the 4-section critique. 1500 truncated once thinking ate ~800
+    // of it, so the real model output failed to parse and the route silently fell
+    // back to the templated mock. Thinking is now off (llm.js); 2400 is margin.
+    max_tokens: 2400,
     temperature: 0.7,
     response_format: { type: 'json_object' },
     messages: [
@@ -120,6 +124,11 @@ export default async function handler(req, res) {
     return
   }
 
+  // Throttle before any work: this is a public, no-auth endpoint that bills a
+  // real model key (even the mock path is public compute), so cap per-visitor
+  // and global request rate. A 429 is fully written here — bail out.
+  if (enforceRateLimit(req, res, { route: 'audit' })) return
+
   const { brandVoice, posts, niche, inspiration } = req.body ?? {}
   const list = Array.isArray(posts) ? posts.filter((p) => typeof p === 'string' && p.trim()) : []
 
@@ -131,7 +140,7 @@ export default async function handler(req, res) {
   // Today's trends from our own cache (never a live source at query time). A
   // cold instance with no cache yet falls back to a fresh mock batch — still no
   // network, still no per-request fee — so the endpoint always answers.
-  const batch = readBatch() || generateMockBatch({ now: new Date() })
+  const batch = (await readBatchAsync()) || generateMockBatch({ now: new Date() })
   const trends = selectNiche(batch, nicheInput)
 
   const useModel = isModelConfigured()

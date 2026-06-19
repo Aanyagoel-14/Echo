@@ -17,7 +17,7 @@
  */
 
 import { harvestBatch, nicheCount } from '../src/lib/trendSources.js'
-import { writeBatch } from '../src/lib/trendStore.js'
+import { writeBatchAsync } from '../src/lib/trendStore.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
   try {
     const batch = await harvestBatch({ now: new Date(), live })
-    const path = writeBatch(batch)
+    const path = await writeBatchAsync(batch)
     console.log('[trends-harvest] wrote batch', {
       harvestedAt: batch.harvestedAt,
       source: batch.source,

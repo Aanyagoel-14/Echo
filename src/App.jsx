@@ -161,6 +161,7 @@ export default function App() {
           <Results
             kit={kit}
             brandVoice={request?.brandVoice}
+            audit={request?.audit}
             onNew={() => go('capture')}
             onChangeVoice={() => go('voice')}
           />

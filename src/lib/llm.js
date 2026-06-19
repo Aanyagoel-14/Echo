@@ -129,10 +129,17 @@ async function resolveTransport(model) {
  */
 export async function chatCompletions(body) {
   const { url, headers, model } = await resolveTransport(body.model)
+  // Default Gemini 2.5's "thinking" OFF for Echo's structured-JSON tasks. Thinking
+  // tokens are drawn from the same max_tokens budget AND billed, so leaving it on
+  // silently eats the output allowance — a full kit/audit then truncates to invalid
+  // JSON (a 502, or a fall back to the mock) while still costing you. Both Google
+  // surfaces accept the OpenAI-compat `reasoning_effort`; an explicit caller value
+  // (in `body`) still wins.
+  const payload = { reasoning_effort: 'none', ...body, model }
   const r = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ ...body, model }),
+    body: JSON.stringify(payload),
   })
   const data = await r.json().catch(() => null)
   // Vertex wraps errors in an array ([{ error }]); the Gemini API and OpenRouter

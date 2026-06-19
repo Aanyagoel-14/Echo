@@ -15,7 +15,7 @@ const ORDER = ['reel', 'carousel', 'thread']
  * generated visuals, Thread as stacked X cards with char counts (§10.8). Copy-to-
  * clipboard everywhere; a tone chip per format shows the voice it's written in.
  */
-export default function Results({ onNew, onChangeVoice, kit, brandVoice }) {
+export default function Results({ onNew, onChangeVoice, kit, brandVoice, audit }) {
   const present = kit ? ORDER.filter((f) => kit[f]) : []
 
   // Defensive empty state (§7): a partial/empty response shows this instead of
@@ -45,6 +45,8 @@ export default function Results({ onNew, onChangeVoice, kit, brandVoice }) {
         <VoiceTag onChange={onChangeVoice} />
       </div>
 
+      {audit?.pivot && <StrategyFromAudit pivot={audit.pivot} niche={audit.niche} />}
+
       <div className="flex flex-col gap-8">
         {kit.reel && <ReelView reel={kit.reel} tone={effectiveTone} />}
         {kit.carousel && <CarouselView carousel={kit.carousel} tone={effectiveTone} />}
@@ -55,6 +57,29 @@ export default function Results({ onNew, onChangeVoice, kit, brandVoice }) {
         Start a new kit
       </Button>
     </section>
+  )
+}
+
+/* ---------- The audit through-line (§F4 · Page 3 → Page 5) ---------- */
+
+// When this kit was generated off the back of an audit, name the strategic
+// direction it followed — so the critique and the new post read as one story,
+// not two disconnected screens. Hidden entirely when there was no prior audit.
+function StrategyFromAudit({ pivot, niche }) {
+  return (
+    <div className="rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-accent">
+          Continuing your audit
+        </p>
+        {niche && (
+          <span className="rounded-full border border-accent/30 bg-accent/5 px-2 py-0.5 text-[10px] font-medium text-accent">
+            {niche}
+          </span>
+        )}
+      </div>
+      <p className="mt-1.5 text-sm leading-relaxed text-ink/90">{pivot}</p>
+    </div>
   )
 }
 
